@@ -1,16 +1,26 @@
 // Implementation of URL record structure
-// for JSON encoding \ decoding
+// for JSON encoding and decoding
 
 package url
 
-import "time"
+import (
+	"encoding/json"
+	"fmt"
+	"time"
+)
+
+const TimeFormat = time.RFC3339
+
+type DateTime struct {
+	time.Time
+}
 
 type Record struct {
-	Id        string    `json:"id"`
-	URL       string    `json:"url"`
-	ShortCode string    `json:"shortCode"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	Id        string   `json:"id"`
+	URL       string   `json:"url"`
+	ShortCode string   `json:"shortCode"`
+	CreatedAt DateTime `json:"createdAt"`
+	UpdatedAt DateTime `json:"updatedAt"`
 	//	  "id": "1",
 	//	  "url": "https://www.example.com/some/long/url",
 	//	  "shortCode": "abc123",
@@ -19,12 +29,38 @@ type Record struct {
 	AccessCount int `json:"accessCount,omitempty"`
 }
 
-// func (r )
-// data, err := json.Marshal(rec)
-// 	if err != nil {
-// 		return err
-// 	}
+// Redifinitions for custom timestamps format instead of
+// time.RFC3339Nano - default selected by `encoding/json` package
+func (d *DateTime) MarshalJSON() ([]byte, error) {
+	return json.Marshal(d.Format(TimeFormat))
+}
 
-// 	if err := json.Unmarshal([]byte(recordText), &record); err != nil {
-// 		return err
-// 	}
+func (d *DateTime) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+
+	timestamp, err := time.Parse(TimeFormat, s)
+	if err != nil {
+		return fmt.Errorf("failed to parse time string %q: %v", s, err)
+	}
+
+	*d = DateTime{timestamp}
+	return nil
+}
+
+func NewRecord(url string) *Record {
+	return &Record{
+		Id:        "newId", // TODO
+		URL:       url,
+		ShortCode: CreateShortURL(),
+		CreatedAt: DateTime{time.Now().UTC()},
+		UpdatedAt: DateTime{time.Now().UTC()},
+	}
+}
+
+func (r *Record) Update() {
+	r.ShortCode = CreateShortURL()
+	r.UpdatedAt = DateTime{time.Now().UTC()}
+}

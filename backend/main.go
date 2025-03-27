@@ -1,16 +1,14 @@
-//
-
 package main
 
 import (
 	"os"
 	"os/signal"
 	"syscall"
-	http_server "url_shortener/server"
+
+	"url_shortener/http_server"
 )
 
 func main() {
-
 	stopChannel := make(chan os.Signal, 1)
 	signal.Notify(stopChannel, os.Interrupt, syscall.SIGTERM)
 

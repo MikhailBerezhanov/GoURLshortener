@@ -2,32 +2,35 @@ package http_server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"time"
+	"url_shortener/url"
 )
+
+var server http.Server
 
 func handler(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if err := recover(); err != nil {
-
-			// http.Err
 			log.Printf("handler recovered error: %v\n", err)
-			// w.WriteHeader(http.StatusInternalServerError)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 		}
 	}()
 
-	fmt.Fprintf(w, "Hello, World!")
+	rec := url.NewRecord(r.URL.String()) // TODO : take field from POST body
+	data, err := json.Marshal(rec)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Failed to create record json", http.StatusInternalServerError)
+	}
+	fmt.Fprintln(w, string(data))
 }
 
-var server http.Server
-
 func Start(port uint16) {
-	// http.HandleFunc("/shorten", handler) // each request will call handler function
-
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /shorten", handler)
 
