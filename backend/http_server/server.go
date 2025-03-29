@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -13,26 +14,65 @@ import (
 
 var server http.Server
 
-func handler(w http.ResponseWriter, r *http.Request) {
-	defer func() {
-		if err := recover(); err != nil {
-			log.Printf("handler recovered error: %v\n", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-		}
-	}()
+func finishWithError(w http.ResponseWriter, msg string, status int) {
+	log.Println(msg)
+	http.Error(w, msg, status)
+}
 
-	rec := url.NewRecord(r.URL.String()) // TODO : take field from POST body
+// Wrapper to add recovery for request handlers
+func recoverHandler(handler http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, request *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				finishWithError(w, fmt.Sprintf("Handler panic with error: %v", err), http.StatusInternalServerError)
+			}
+		}()
+
+		handler.ServeHTTP(w, request)
+	}
+}
+
+func getURLfromRequestBody(r *http.Request) (string, error) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return "", err
+	}
+	defer r.Body.Close()
+
+	var rec url.Record
+	err = json.Unmarshal(body, &rec)
+	if err != nil {
+		return "", err
+	}
+
+	if len(rec.URL) == 0 {
+		return "", fmt.Errorf("URL field is missing or empty")
+	}
+
+	return rec.URL, nil
+}
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	reqURL, err := getURLfromRequestBody(r)
+	if err != nil {
+		finishWithError(w, fmt.Sprintf("Failed to parse request body: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	rec := url.NewRecord(reqURL)
 	data, err := json.Marshal(rec)
 	if err != nil {
 		log.Println(err)
-		http.Error(w, "Failed to create record json", http.StatusInternalServerError)
+		finishWithError(w, fmt.Sprintf("Failed to create response json: %v", err), http.StatusInternalServerError)
+		return
 	}
+
 	fmt.Fprintln(w, string(data))
 }
 
 func Start(port uint16) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /shorten", handler)
+	mux.HandleFunc("POST /shorten", recoverHandler(handler))
 
 	addr := fmt.Sprintf("localhost:%d", port)
 
