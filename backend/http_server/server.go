@@ -8,11 +8,14 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 	"url_shortener/url"
 )
 
 var server http.Server
+
+var recordStore url.RecordStore // TODO: usa handlers context instead
 
 func finishWithError(w http.ResponseWriter, msg string, status int) {
 	log.Println(msg)
@@ -20,7 +23,7 @@ func finishWithError(w http.ResponseWriter, msg string, status int) {
 }
 
 // Wrapper to add recovery for request handlers
-func recoverHandler(handler http.HandlerFunc) http.HandlerFunc {
+func recoveryHandler(handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, request *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
@@ -52,7 +55,13 @@ func getURLfromRequestBody(r *http.Request) (string, error) {
 	return rec.URL, nil
 }
 
-func handler(w http.ResponseWriter, r *http.Request) {
+func shortURLcreationHandler(w http.ResponseWriter, r *http.Request) {
+	contentType := r.Header.Get("Content-Type")
+	if !strings.HasPrefix(contentType, "application/json") {
+		finishWithError(w, fmt.Sprintf("Unsupported Content-Type: %s", contentType), http.StatusUnsupportedMediaType)
+		return
+	}
+
 	reqURL, err := getURLfromRequestBody(r)
 	if err != nil {
 		finishWithError(w, fmt.Sprintf("Failed to parse request body: %v", err), http.StatusBadRequest)
@@ -60,9 +69,15 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rec := url.NewRecord(reqURL)
+	id, err := recordStore.InsertRecord(*rec)
+	if err != nil {
+		finishWithError(w, fmt.Sprintf("Failed to insert record to store: %v", err), http.StatusInternalServerError)
+		return
+	}
+	rec.Id = id
+
 	data, err := json.Marshal(rec)
 	if err != nil {
-		log.Println(err)
 		finishWithError(w, fmt.Sprintf("Failed to create response json: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -70,9 +85,39 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, string(data))
 }
 
-func Start(port uint16) {
+func getHandler(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	parts := strings.Split(path, "/")
+	var shortCode string
+	if len(parts) > 1 {
+		shortCode = parts[len(parts)-1]
+	}
+	if len(shortCode) == 0 {
+		finishWithError(w, fmt.Sprintf("Invalid URL path format: %s", path), http.StatusBadRequest)
+		return
+	}
+
+	rec, err := recordStore.SelectRecord(shortCode)
+	if err != nil {
+		finishWithError(w, fmt.Sprintf("Failed to select record from store: %q", shortCode), http.StatusInternalServerError)
+		return
+	}
+
+	// TODO: separate func
+	data, err := json.Marshal(rec)
+	if err != nil {
+		finishWithError(w, fmt.Sprintf("Failed to create response json: %v", err), http.StatusInternalServerError)
+		return
+	}
+	fmt.Fprintln(w, string(data))
+}
+
+func Start(port uint16, dataStore url.RecordStore) {
+	recordStore = dataStore
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /shorten", recoverHandler(handler))
+	mux.HandleFunc("POST /shorten", recoveryHandler(shortURLcreationHandler))
+	mux.HandleFunc("GET /shorten/", recoveryHandler(getHandler))
 
 	addr := fmt.Sprintf("localhost:%d", port)
 

@@ -29,6 +29,18 @@ type Record struct {
 	AccessCount int `json:"accessCount,omitempty"`
 }
 
+type RecordStore interface {
+	//
+
+	InsertRecord(r Record) (id string, err error)
+
+	SelectRecord(shortURL string) (rec Record, err error)
+
+	// TODO
+	// UpdateRecord
+	// DEleteRecord
+}
+
 // Redifinitions for custom timestamps format instead of
 // time.RFC3339Nano - default selected by `encoding/json` package
 func (d *DateTime) MarshalJSON() ([]byte, error) {
