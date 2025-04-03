@@ -1,6 +1,6 @@
-// Basic implementation of memory db
+// Basic memory db implementing url.RecordStore interface
 
-package mem_db
+package datastore
 
 import (
 	"fmt"

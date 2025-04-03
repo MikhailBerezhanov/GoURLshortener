@@ -1,11 +1,12 @@
 package main
 
 import (
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
-	mem_db "url_shortener/db"
+	"url_shortener/datastore"
 	"url_shortener/http_server"
 )
 
@@ -13,7 +14,12 @@ func main() {
 	stopChannel := make(chan os.Signal, 1)
 	signal.Notify(stopChannel, os.Interrupt, syscall.SIGTERM)
 
-	dataStore := mem_db.NewMemDB()
+	// TEST
+	if _, err := datastore.ConnectMongoDb(""); err != nil {
+		log.Printf("Failed to connect to Mongo DB: %v\n", err)
+	}
+
+	dataStore := datastore.NewMemDB()
 
 	go http_server.Start(8080, dataStore)
 
