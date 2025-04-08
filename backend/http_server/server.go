@@ -72,6 +72,7 @@ func sendJsonResponse(w http.ResponseWriter, rec *url.Record) {
 		finishWithError(w, fmt.Sprintf("Failed to create response json: %v", err), http.StatusInternalServerError)
 		return
 	}
+
 	fmt.Fprintln(w, string(data))
 }
 
@@ -95,6 +96,7 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.WriteHeader(http.StatusCreated)
 	sendJsonResponse(w, rec)
 }
 
