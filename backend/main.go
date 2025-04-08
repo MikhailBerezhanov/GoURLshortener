@@ -8,7 +8,6 @@ import (
 
 	"url_shortener/datastore"
 	"url_shortener/http_server"
-	"url_shortener/url"
 )
 
 func main() {
@@ -18,15 +17,14 @@ func main() {
 	// TEST
 	mongoDB := datastore.NewMongoDB()
 	if err := mongoDB.Connect(""); err != nil {
-		log.Printf("Failed to connect to Mongo DB: %v\n", err)
+		log.Fatalf("Failed to connect to Mongo DB: %v\n", err)
 	}
 	defer mongoDB.Disconnect()
 
-	var dataStore url.RecordStore = mongoDB //datastore.NewMemDB()
-
-	go http_server.Start(8080, dataStore)
+	server := http_server.NewServer(mongoDB)
+	go server.Start(8080) // TODO: move port to config
 
 	<-stopChannel // Wait for the termination signals
 
-	http_server.Stop()
+	server.Stop()
 }

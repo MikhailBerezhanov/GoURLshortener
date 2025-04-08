@@ -17,7 +17,10 @@ type contextKey string
 
 const recordStoreKey contextKey = "recordStore"
 
-var server http.Server
+type Server struct {
+	server      http.Server
+	recordStore url.RecordStore
+}
 
 func finishWithError(w http.ResponseWriter, msg string, status int) {
 	log.Println(msg)
@@ -122,18 +125,22 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 	sendJsonResponse(w, &rec)
 }
 
-func Start(port uint16, recordStore url.RecordStore) {
+func NewServer(recordStore url.RecordStore) *Server {
+	return &Server{http.Server{}, recordStore}
+}
+
+func (s *Server) Start(port uint16) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /shorten", withRecoveryAndContext(postHandler, recordStore))
-	mux.HandleFunc("GET /shorten/", withRecoveryAndContext(getHandler, recordStore))
+	mux.HandleFunc("POST /shorten", withRecoveryAndContext(postHandler, s.recordStore))
+	mux.HandleFunc("GET /shorten/", withRecoveryAndContext(getHandler, s.recordStore))
 
 	addr := fmt.Sprintf("localhost:%d", port)
 
-	server = http.Server{Addr: addr, Handler: mux}
+	s.server = http.Server{Addr: addr, Handler: mux}
 
 	log.Printf("Server running on %q\n", addr)
 
-	err := server.ListenAndServe()
+	err := s.server.ListenAndServe()
 	if errors.Is(err, http.ErrServerClosed) {
 		log.Println("Server closed")
 	} else if err != nil {
@@ -141,13 +148,13 @@ func Start(port uint16, recordStore url.RecordStore) {
 	}
 }
 
-func Stop() {
+func (s *Server) Stop() {
 	log.Println("Shutting down server...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := server.Shutdown(ctx); err != nil {
+	if err := s.server.Shutdown(ctx); err != nil {
 		log.Fatalf("Shutdown error: %v\n", err)
 	}
 
