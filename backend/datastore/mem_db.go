@@ -3,27 +3,22 @@
 package datastore
 
 import (
-	"fmt"
 	"url_shortener/url"
 )
 
 type MemDB struct {
 	data map[string]url.Record
-	id   int
 }
 
 func NewMemDB() *MemDB {
-	return &MemDB{make(map[string]url.Record), 0}
+	return &MemDB{make(map[string]url.Record)}
 }
 
 // TODO: mutual access from differenr goroutines
 
-func (m *MemDB) InsertRecord(r url.Record) (id string, err error) {
-	// TODO: set id
-	m.data[r.ShortCode] = r
-	id = fmt.Sprintf("%d", m.id)
-	m.id++
-	return
+func (m *MemDB) InsertRecord(r *url.Record) error {
+	m.data[r.ShortCode] = *r
+	return nil
 }
 
 func (m *MemDB) SelectRecord(shortURL string) (rec url.Record, err error) {
@@ -31,5 +26,5 @@ func (m *MemDB) SelectRecord(shortURL string) (rec url.Record, err error) {
 		return rec, nil
 	}
 
-	return url.Record{}, fmt.Errorf("no record for shortURL %q found", shortURL)
+	return url.Record{}, url.ErrRecordNotExist
 }

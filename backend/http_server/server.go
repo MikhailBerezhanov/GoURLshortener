@@ -87,12 +87,10 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 
 	rec := url.NewRecord(reqURL)
 	recordStore := getRecordStoreFromRequestContext(r)
-	id, err := recordStore.InsertRecord(*rec)
-	if err != nil {
+	if err := recordStore.InsertRecord(rec); err != nil {
 		finishWithError(w, fmt.Sprintf("Failed to insert record to store: %v", err), http.StatusInternalServerError)
 		return
 	}
-	rec.Id = id
 
 	sendJsonResponse(w, rec)
 }
@@ -112,7 +110,12 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 	recordStore := getRecordStoreFromRequestContext(r)
 	rec, err := recordStore.SelectRecord(shortCode)
 	if err != nil {
-		finishWithError(w, fmt.Sprintf("Failed to select record from store: %q", shortCode), http.StatusInternalServerError)
+		if errors.Is(err, url.ErrRecordNotExist) {
+			finishWithError(w, fmt.Sprintf("No data for requested shortCode: %q", shortCode), http.StatusNotFound)
+		} else {
+			finishWithError(w, fmt.Sprintf("Failed to select record from store: %q", shortCode), http.StatusInternalServerError)
+		}
+
 		return
 	}
 

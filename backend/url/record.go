@@ -4,7 +4,10 @@
 package url
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -16,23 +19,25 @@ type DateTime struct {
 }
 
 type Record struct {
-	Id        string   `json:"id"`
-	URL       string   `json:"url"`
-	ShortCode string   `json:"shortCode"`
-	CreatedAt DateTime `json:"createdAt"`
-	UpdatedAt DateTime `json:"updatedAt"`
+	Id        string   `json:"id" bson:"_id"`
+	URL       string   `json:"url" bson:"url"`
+	ShortCode string   `json:"shortCode" bson:"shortCode"`
+	CreatedAt DateTime `json:"createdAt" bson:"createdAt"`
+	UpdatedAt DateTime `json:"updatedAt" bson:"updatedAt"`
 	//	  "id": "1",
 	//	  "url": "https://www.example.com/some/long/url",
 	//	  "shortCode": "abc123",
 	//	  "createdAt": "2021-09-01T12:00:00Z",
 	//	  "updatedAt": "2021-09-01T12:00:00Z"
-	AccessCount int `json:"accessCount,omitempty"`
+	AccessCount int `json:"accessCount,omitempty" bson:"accessCount,omitempty"`
 }
+
+var ErrRecordNotExist = errors.New("record does not exist")
 
 type RecordStore interface {
 	//
 
-	InsertRecord(r Record) (id string, err error)
+	InsertRecord(r *Record) error
 
 	SelectRecord(shortURL string) (rec Record, err error)
 
@@ -62,9 +67,15 @@ func (d *DateTime) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func generateId(len int) string {
+	b := make([]byte, len)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
 func NewRecord(url string) *Record {
 	return &Record{
-		Id:        "newId", // TODO
+		Id:        generateId(10),
 		URL:       url,
 		ShortCode: CreateShortURL(),
 		CreatedAt: DateTime{time.Now().UTC()},
@@ -75,4 +86,12 @@ func NewRecord(url string) *Record {
 func (r *Record) Update() {
 	r.ShortCode = CreateShortURL()
 	r.UpdatedAt = DateTime{time.Now().UTC()}
+}
+
+func (r *Record) String() string {
+	if data, err := json.Marshal(r); err == nil {
+		return string(data)
+	}
+
+	return fmt.Sprintf("%v", *r)
 }
